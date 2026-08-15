@@ -28,7 +28,6 @@ from functools import wraps
 from uuid import uuid4
 
 import matplotlib
-matplotlib.use("Agg")  # no GUI - this is a console-only app; charts save to PNG
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -1011,6 +1010,7 @@ class WellnessAnalytics:
             plt.xticks(rotation=30, ha="right")
         fig.tight_layout()
         fig.savefig(path, dpi=CHART_DPI)
+        plt.show()
         plt.close(fig)
         return path
 
@@ -1031,6 +1031,7 @@ class WellnessAnalytics:
             ax.legend()
         fig.tight_layout()
         fig.savefig(path, dpi=CHART_DPI)
+        plt.show()
         plt.close(fig)
         return path
 
@@ -1054,6 +1055,7 @@ class WellnessAnalytics:
             fig.autofmt_xdate()
         fig.tight_layout()
         fig.savefig(path, dpi=CHART_DPI)
+        plt.show()
         plt.close(fig)
         return path
 
@@ -1109,6 +1111,7 @@ class WellnessAnalytics:
 
         fig.tight_layout(rect=[0, 0, 1, 0.96])
         fig.savefig(path, dpi=CHART_DPI)
+        plt.show()
         plt.close(fig)
         return path
 
