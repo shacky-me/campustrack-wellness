@@ -1,117 +1,334 @@
+"""
+Unit tests for CampusTrack Business Logic & Reports.
+Assigned section: Urbashi Barua
+
+These tests use the project's real models and in-memory repository.
+They verify report accuracy, update-by-record-ID behaviour, filtering,
+and the required StudentNotFoundError / RecordNotFoundError cases.
+"""
+
 import unittest
 
-from campustrack.exceptions import StudentNotFoundError, DuplicateStudentError
-from campustrack.models import Student, ExerciseRecord, SleepPattern, Survey
+from campustrack.exceptions import RecordNotFoundError, StudentNotFoundError
+from campustrack.models import ExerciseRecord, SleepPattern, Student, Survey
 from campustrack.repository import InMemoryStudentRepository
 from campustrack.system import WellnessSystem
 
 
-class TestWellnessSystemStudentManagement(unittest.TestCase):
+class TestWellnessSystem(unittest.TestCase):
 
     def setUp(self):
-        self.system = WellnessSystem(repository=InMemoryStudentRepository())
+        self.repository = InMemoryStudentRepository()
+        self.system = WellnessSystem(
+            self.repository,
+            max_students=20,
+        )
 
-    def test_add_and_get_student(self):
-        self.system.add_student(Student("S001", "Amina", 21, "BIT", "Information Technology"))
-        self.assertEqual(self.system.get_student("S001").name, "Amina")
+        self.student_1 = Student(
+            "S001",
+            "Alex Morgan",
+            22,
+            "Master of IT",
+        )
+        self.student_2 = Student(
+            "S002",
+            "Taylor Lee",
+            24,
+            "Master of Business",
+        )
 
-    def test_get_missing_student_raises(self):
+        self.system.add_student(self.student_1)
+        self.system.add_student(self.student_2)
+
+    # --------------------------------------------------------------
+    # Helpers
+    # --------------------------------------------------------------
+    @staticmethod
+    def make_exercise(
+        duration=30,
+        day="monday",
+        exercise_type="walking",
+    ):
+        return ExerciseRecord(
+            3,
+            exercise_type,
+            duration,
+            day,
+            "07:30",
+        )
+
+    @staticmethod
+    def make_sleep(start="22:00", end="06:00", good=True):
+        return SleepPattern(good, start, end)
+
+    @staticmethod
+    def make_survey(
+        stress=4,
+        mood=7,
+        answers=None,
+        notes="",
+    ):
+        if answers is None:
+            answers = [4, 4, 4, 4, 4]
+
+        return Survey(
+            "2026-08-15",
+            stress,
+            mood,
+            answers,
+            notes,
+        )
+
+    # --------------------------------------------------------------
+    # Student logic
+    # --------------------------------------------------------------
+    def test_get_student_returns_registered_student(self):
+        student = self.system.get_student("s001")
+        self.assertEqual(student.student_id, "S001")
+
+    def test_get_student_raises_student_not_found(self):
         with self.assertRaises(StudentNotFoundError):
-            self.system.get_student("NOPE")
+            self.system.get_student("S999")
 
-    def test_duplicate_student_raises(self):
-        self.system.add_student(Student("S001", "Amina", 21, "BIT", "Information Technology"))
-        with self.assertRaises(DuplicateStudentError):
-            self.system.add_student(Student("S001", "Someone", 22, "BBus", "Business"))
+    def test_duplicate_student_id_is_rejected(self):
+        duplicate = Student(
+            "S001",
+            "Different Person",
+            30,
+            "MBA",
+        )
 
-    def test_student_exists(self):
-        self.system.add_student(Student("S001", "Amina", 21, "BIT", "Information Technology"))
-        self.assertTrue(self.system.student_exists("S001"))
-        self.assertFalse(self.system.student_exists("S999"))
+        with self.assertRaises(ValueError):
+            self.system.add_student(duplicate)
 
+    def test_update_student_changes_selected_fields(self):
+        updated = self.system.update_student(
+            "S001",
+            name="Alex M.",
+            course="Data Science",
+        )
 
-class TestWellnessSystemRecords(unittest.TestCase):
+        self.assertEqual(updated.name, "Alex M.")
+        self.assertEqual(updated.course, "Data Science")
 
-    def setUp(self):
-        self.system = WellnessSystem(repository=InMemoryStudentRepository())
-        self.system.add_student(Student("S001", "Amina", 21, "BIT", "Information Technology"))
+    # --------------------------------------------------------------
+    # Record add/update logic
+    # --------------------------------------------------------------
+    def test_add_exercise_generates_record_id(self):
+        record = self.make_exercise()
 
-    def test_add_exercise_record_via_system(self):
-        self.system.add_exercise_record("S001", ExerciseRecord(3, "running", 30, "monday", "07:00"))
-        self.assertEqual(len(self.system.get_student("S001").exercise_records), 1)
+        added = self.system.add_exercise_record(
+            "S001",
+            record,
+        )
 
-    def test_add_record_to_missing_student_raises(self):
-        with self.assertRaises(StudentNotFoundError):
-            self.system.add_exercise_record("S999", ExerciseRecord(3, "running", 30, "monday", "07:00"))
+        self.assertTrue(hasattr(added, "record_id"))
+        self.assertEqual(added.record_id, "EX001")
 
+    def test_update_exercise_record_by_id(self):
+        record = self.make_exercise(duration=30)
+        self.system.add_exercise_record("S001", record)
 
-class TestWellnessSystemFaculty(unittest.TestCase):
+        updated = self.system.update_exercise_record(
+            "S001",
+            record.record_id,
+            duration=45,
+            day="tuesday",
+        )
 
-    def setUp(self):
-        self.system = WellnessSystem(repository=InMemoryStudentRepository())
-        self.system.add_student(Student("S001", "Amina", 21, "BIT", "Information Technology"))
-        self.system.add_student(Student("S002", "Ben", 22, "BBus", "Business"))
-        self.system.add_student(Student("S003", "Cleo", 23, "BSc IT", "Information Technology"))
+        self.assertEqual(updated.duration, 45)
+        self.assertEqual(updated.day, "tuesday")
 
-    def test_students_by_faculty(self):
-        it_students = self.system.students_by_faculty("Information Technology")
-        self.assertEqual(len(it_students), 2)
+    def test_update_missing_record_raises_record_not_found(self):
+        with self.assertRaises(RecordNotFoundError):
+            self.system.update_exercise_record(
+                "S001",
+                "EX999",
+                duration=40,
+            )
 
-    def test_students_by_faculty_case_insensitive(self):
-        it_students = self.system.students_by_faculty("information technology")
-        self.assertEqual(len(it_students), 2)
+    def test_update_sleep_recalculates_hours(self):
+        record = self.make_sleep(
+            start="22:00",
+            end="06:00",
+        )
+        self.system.add_sleep_record("S001", record)
 
-    def test_faculty_counts(self):
-        counts = self.system.faculty_counts()
-        self.assertEqual(counts["Information Technology"], 2)
-        self.assertEqual(counts["Business"], 1)
+        updated = self.system.update_sleep_record(
+            "S001",
+            record.record_id,
+            start="23:00",
+            end="06:00",
+        )
 
-    def test_known_faculties_sorted_unique(self):
-        self.assertEqual(self.system.known_faculties(), ["Business", "Information Technology"])
+        self.assertEqual(updated.hours_slept, 7.0)
 
-
-class TestWellnessSystemReports(unittest.TestCase):
-
-    def setUp(self):
-        self.system = WellnessSystem(repository=InMemoryStudentRepository())
-        self.system.add_student(Student("S001", "Amina", 21, "BIT", "Information Technology"))
-        self.system.add_exercise_record("S001", ExerciseRecord(3, "running", 30, "monday", "07:00"))
-        self.system.add_exercise_record("S001", ExerciseRecord(1, "walking", 5, "tuesday", "08:00"))
-        self.system.add_sleep_record("S001", SleepPattern(True, "23:00", "06:00"))
-        self.system.add_survey("S001", Survey("2026-08-06", 8, 2, [1, 1, 2, 1, 2], "Struggling"))
-
+    # --------------------------------------------------------------
+    # Reports
+    # --------------------------------------------------------------
     def test_exercise_count_report(self):
-        self.assertEqual(self.system.exercise_count_report()["S001"], 2)
+        self.system.add_exercise_record(
+            "S001",
+            self.make_exercise(),
+        )
+        self.system.add_exercise_record(
+            "S001",
+            self.make_exercise(day="wednesday"),
+        )
+        self.system.add_exercise_record(
+            "S002",
+            self.make_exercise(),
+        )
+
+        report = self.system.exercise_count_report()
+
+        self.assertEqual(report["S001"], 2)
+        self.assertEqual(report["S002"], 1)
 
     def test_average_sleep_report(self):
-        self.assertEqual(self.system.average_sleep_report()["S001"], 7.0)
+        self.system.add_sleep_record(
+            "S001",
+            self.make_sleep("22:00", "06:00"),
+        )
+        self.system.add_sleep_record(
+            "S001",
+            self.make_sleep("23:00", "06:00"),
+        )
 
-    def test_average_sleep_report_omits_students_without_data(self):
-        self.system.add_student(Student("S002", "Ben", 22, "BBus", "Business"))
         report = self.system.average_sleep_report()
-        self.assertNotIn("S002", report)
 
-    def test_students_needing_intervention_flags_this_student(self):
-        flagged = self.system.students_needing_intervention()
-        self.assertEqual(len(flagged), 1)
-        self.assertEqual(flagged[0].student_id, "S001")
+        self.assertEqual(report["S001"], 7.5)
+        self.assertEqual(report["S002"], 0.0)
 
-    def test_exercise_sessions_on_day(self):
-        sessions = self.system.exercise_sessions_on_day("monday")
-        self.assertEqual(len(sessions), 1)
-        self.assertEqual(sessions[0][1].exercise_type, "running")
+    def test_sessions_by_day_report(self):
+        self.system.add_exercise_record(
+            "S001",
+            self.make_exercise(day="monday"),
+        )
+        self.system.add_exercise_record(
+            "S002",
+            self.make_exercise(day="tuesday"),
+        )
 
-    def test_exercise_sessions_on_day_no_matches(self):
-        self.assertEqual(self.system.exercise_sessions_on_day("sunday"), [])
+        matches = self.system.sessions_by_day_report("Monday")
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0][0].student_id, "S001")
 
     def test_survey_summary_report(self):
-        report = self.system.survey_summary_report()
-        self.assertEqual(len(report["S001"]), 1)
+        self.system.add_survey(
+            "S001",
+            self.make_survey(
+                stress=4,
+                mood=8,
+                answers=[4, 4, 4, 4, 4],
+            ),
+        )
 
-    def test_all_concerns_report_includes_short_session_and_survey(self):
-        report = self.system.all_concerns_report()
-        # short walking session (5 min) + low mood survey should both flag
-        self.assertGreaterEqual(len(report["S001"]), 2)
+        report = self.system.survey_summary_report()
+        summary = report["S001"]
+
+        self.assertEqual(summary["survey_count"], 1)
+        self.assertEqual(summary["average_stress"], 4.0)
+        self.assertEqual(summary["average_mood"], 8.0)
+        self.assertEqual(summary["average_wellbeing"], 80.0)
+
+    def test_students_needing_intervention(self):
+        self.system.add_sleep_record(
+            "S001",
+            self.make_sleep(
+                start="01:00",
+                end="05:00",
+                good=False,
+            ),
+        )
+
+        flagged = self.system.students_needing_intervention()
+        ids = [student.student_id for student in flagged]
+
+        self.assertIn("S001", ids)
+
+    def test_all_concerns_report_uses_polymorphism(self):
+        self.system.add_exercise_record(
+            "S001",
+            self.make_exercise(duration=5),
+        )
+        self.system.add_sleep_record(
+            "S001",
+            self.make_sleep(
+                start="01:00",
+                end="05:00",
+                good=False,
+            ),
+        )
+        self.system.add_survey(
+            "S001",
+            self.make_survey(
+                stress=9,
+                mood=3,
+                answers=[1, 1, 1, 1, 1],
+            ),
+        )
+
+        concerns = self.system.all_concerns_report()
+        kinds = {
+            item["record_type"]
+            for item in concerns
+        }
+
+        self.assertIn("exercise", kinds)
+        self.assertIn("sleep", kinds)
+        self.assertIn("survey", kinds)
+
+    def test_student_wellness_summary(self):
+        self.system.add_exercise_record(
+            "S001",
+            self.make_exercise(duration=40),
+        )
+        self.system.add_sleep_record(
+            "S001",
+            self.make_sleep("22:00", "06:00"),
+        )
+        self.system.add_survey(
+            "S001",
+            self.make_survey(),
+        )
+
+        summary = self.system.student_wellness_summary("S001")
+
+        self.assertEqual(summary["exercise_records"], 1)
+        self.assertEqual(summary["total_exercise_minutes"], 40)
+        self.assertEqual(summary["sleep_records"], 1)
+        self.assertEqual(summary["survey_count"], 1)
+
+    def test_overall_summary_report(self):
+        self.system.add_exercise_record(
+            "S001",
+            self.make_exercise(),
+        )
+        self.system.add_sleep_record(
+            "S001",
+            self.make_sleep(),
+        )
+        self.system.add_survey(
+            "S001",
+            self.make_survey(),
+        )
+
+        report = self.system.overall_summary_report()
+
+        self.assertEqual(report["total_students"], 2)
+        self.assertEqual(report["total_exercise_records"], 1)
+        self.assertEqual(report["total_sleep_records"], 1)
+        self.assertEqual(report["total_surveys"], 1)
+
+    def test_filter_students_by_course(self):
+        matches = self.system.filter_students(
+            course="master of it"
+        )
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].student_id, "S001")
 
 
 if __name__ == "__main__":
