@@ -17,8 +17,8 @@ Sections in this file (search for the "# ==" banners):
   6. Console CLI           (menus, input validation, main())
 
 Run with:  python campustrack_app.py
-Data is stored in a single CSV file: data/campustrack_data.csv
-(created automatically on first run).
+Data is stored in a single CSV file, campustrack_data.csv, saved in the
+same folder as this script (created automatically on first run).
 """
 
 import os
@@ -1119,7 +1119,7 @@ class WellnessAnalytics:
 
 SEP = "-" * 55
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH = os.path.join(BASE_DIR, "data", "campustrack_data.csv")
+DATA_PATH = os.path.join(BASE_DIR, "campustrack_data.csv")
 CHARTS_DIR = os.path.join(BASE_DIR, "charts")
 
 
