@@ -2,7 +2,9 @@ import os
 import shutil
 import tempfile
 import unittest
+import pandas as pd
 
+from unittest.mock import patch
 from campustrack.exceptions import DataFileError, DuplicateStudentError
 from campustrack.models import Student, ExerciseRecord, SleepPattern, Survey
 from campustrack.repository import InMemoryStudentRepository, CsvStudentRepository
@@ -49,6 +51,152 @@ class TestCsvStudentRepository(unittest.TestCase):
         repo = CsvStudentRepository(self.tmp_dir)
         self.assertEqual(repo.count(), 0)
         self.assertTrue(os.path.exists(repo.students_path))
+
+    def test_corrupted_exercise_record_raises_data_file_error(self):
+        repo = CsvStudentRepository(self.tmp_dir)
+
+        repo.add(
+            Student(
+                "S001",
+                "Amina",
+                21,
+                "BIT",
+                "Information Technology",
+            )
+        )
+
+        with open(repo.exercise_path, "w") as f:
+            f.write(
+                "student_id,days_per_week,exercise_type,"
+                "duration,day,time_of_day\n"
+            )
+            f.write(
+                "S001,invalid,running,30,monday,07:00\n"
+            )
+
+        with self.assertRaises(DataFileError):
+            CsvStudentRepository(self.tmp_dir)
+
+    def test_corrupted_sleep_record_raises_data_file_error(self):
+        repo = CsvStudentRepository(self.tmp_dir)
+
+        repo.add(
+            Student(
+                "S001",
+                "Amina",
+                21,
+                "BIT",
+                "Information Technology",
+            )
+        )
+
+        with open(repo.sleep_path, "w") as f:
+            f.write(
+                "student_id,had_good_sleep,start,end\n"
+            )
+            f.write(
+                "S001,true,invalid-time,06:00\n"
+            )
+
+        with self.assertRaises(DataFileError):
+            CsvStudentRepository(self.tmp_dir)
+
+    def test_atomic_write_cleans_up_temp_file_on_failure(self):
+        repo = CsvStudentRepository(self.tmp_dir)
+
+        target_path = repo.students_path
+        tmp_path = target_path + ".tmp"
+
+        with patch(
+            "campustrack.repository.os.replace",
+            side_effect=OSError("simulated failure")
+        ):
+            with self.assertRaises(DataFileError):
+                repo._atomic_write(
+                    pd.DataFrame(
+                        [
+                            {
+                                "student_id": "S001",
+                                "name": "Amina",
+                                "age": 21,
+                                "course": "BIT",
+                                "faculty": "Information Technology",
+                            }
+                        ]
+                    ),
+                    target_path,
+                )
+
+        self.assertFalse(os.path.exists(tmp_path))
+
+    def test_corrupted_survey_raises_data_file_error(self):
+        repo = CsvStudentRepository(self.tmp_dir)
+
+        repo.add(
+            Student(
+                "S001",
+                "Amina",
+                21,
+                "BIT",
+                "Information Technology",
+            )
+        )
+
+        with open(repo.surveys_path, "w") as f:
+            f.write(
+                "student_id,entry_date,stress_level,mood_rating,"
+                "wellbeing_answers,notes\n"
+            )
+            f.write(
+                "S001,2026-08-06,invalid,8,4;4;4;4;4,Test\n"
+            )
+
+        with self.assertRaises(DataFileError):
+            CsvStudentRepository(self.tmp_dir)
+            
+    def test_exercise_record_for_unknown_student_raises_data_file_error(self):
+        repo = CsvStudentRepository(self.tmp_dir)
+
+        with open(repo.exercise_path, "w") as f:
+            f.write(
+                "student_id,days_per_week,exercise_type,"
+                "duration,day,time_of_day\n"
+            )
+            f.write(
+                "S999,3,running,30,monday,07:00\n"
+            )
+
+        with self.assertRaises(DataFileError):
+            CsvStudentRepository(self.tmp_dir)
+
+    def test_sleep_record_for_unknown_student_raises_data_file_error(self):
+        repo = CsvStudentRepository(self.tmp_dir)
+
+        with open(repo.sleep_path, "w") as f:
+            f.write(
+                "student_id,had_good_sleep,start,end\n"
+            )
+            f.write(
+                "S999,true,23:00,06:00\n"
+            )
+
+        with self.assertRaises(DataFileError):
+            CsvStudentRepository(self.tmp_dir)
+
+    def test_survey_for_unknown_student_raises_data_file_error(self):
+        repo = CsvStudentRepository(self.tmp_dir)
+
+        with open(repo.surveys_path, "w") as f:
+            f.write(
+                "student_id,entry_date,stress_level,mood_rating,"
+                "wellbeing_answers,notes\n"
+            )
+            f.write(
+                "S999,2026-08-06,3,8,4;4;4;4;4,Test\n"
+            )
+
+        with self.assertRaises(DataFileError):
+            CsvStudentRepository(self.tmp_dir)
 
     def test_add_persists_to_disk(self):
         repo = CsvStudentRepository(self.tmp_dir)

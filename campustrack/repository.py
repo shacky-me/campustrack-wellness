@@ -28,7 +28,11 @@ from abc import ABC, abstractmethod
 
 import pandas as pd
 
-from campustrack.exceptions import DataFileError, DuplicateStudentError
+from campustrack.exceptions import (
+    DataFileError,
+    DuplicateStudentError,
+    ValidationError,
+)
 from campustrack.models import Student, ExerciseRecord, SleepPattern, Survey
 
 
@@ -159,30 +163,88 @@ class CsvStudentRepository(StudentRepository):
 
         for _, row in exercise_df.iterrows():
             student = self._students.get(row["student_id"])
+
             if student is None:
-                continue  # orphaned record (student since removed) - skip rather than crash
-            student.add_exercise_record(ExerciseRecord(
-                int(row["days_per_week"]), row["exercise_type"], int(row["duration"]),
-                row["day"], row["time_of_day"],
-            ))
+                raise DataFileError(
+                    f"exercise_records.csv contains record for unknown student "
+                    f"'{row['student_id']}'."
+                )
+
+            try:
+                record = ExerciseRecord(
+                    int(row["days_per_week"]),
+                    row["exercise_type"],
+                    int(row["duration"]),
+                    row["day"],
+                    row["time_of_day"],
+                )
+
+                student.add_exercise_record(record)
+
+            except (ValueError, KeyError, ValidationError) as exc:
+                raise DataFileError(
+                    f"Malformed row in exercise_records.csv: {exc}"
+                ) from exc
 
         for _, row in sleep_df.iterrows():
             student = self._students.get(row["student_id"])
+
             if student is None:
-                continue
-            had_good_sleep = str(row["had_good_sleep"]).strip().lower() in ("true", "1", "yes")
-            student.add_sleep_record(SleepPattern(had_good_sleep, row["start"], row["end"]))
+                raise DataFileError(
+                    f"sleep_records.csv contains record for unknown student "
+                    f"'{row['student_id']}'."
+                )
+
+            try:
+                had_good_sleep = (
+                    str(row["had_good_sleep"]).strip().lower()
+                    in ("true", "1", "yes")
+                )
+
+                record = SleepPattern(
+                    had_good_sleep,
+                    row["start"],
+                    row["end"],
+                )
+
+                student.add_sleep_record(record)
+
+            except (ValueError, KeyError, ValidationError) as exc:
+                raise DataFileError(
+                    f"Malformed row in sleep_records.csv: {exc}"
+                ) from exc
 
         for _, row in surveys_df.iterrows():
             student = self._students.get(row["student_id"])
+
             if student is None:
-                continue
-            answers_raw = str(row["wellbeing_answers"])
-            answers = [int(a) for a in answers_raw.split(";") if a.strip()]
-            student.add_survey(Survey(
-                row["entry_date"], int(row["stress_level"]), int(row["mood_rating"]),
-                answers, row.get("notes", ""),
-            ))
+                raise DataFileError(
+                    f"surveys.csv contains record for unknown student "
+                    f"'{row['student_id']}'."
+                )
+
+            try:
+                answers_raw = str(row["wellbeing_answers"])
+                answers = [
+                    int(a)
+                    for a in answers_raw.split(";")
+                    if a.strip()
+                ]
+
+                survey = Survey(
+                    row["entry_date"],
+                    int(row["stress_level"]),
+                    int(row["mood_rating"]),
+                    answers,
+                    row.get("notes", ""),
+                )
+
+                student.add_survey(survey)
+
+            except (ValueError, KeyError, ValidationError) as exc:
+                raise DataFileError(
+                    f"Malformed row in surveys.csv: {exc}"
+                ) from exc
 
         # First run - none of the four files exist yet. Create them now
         # (empty, headers only) rather than waiting for the first add(),
@@ -195,11 +257,21 @@ class CsvStudentRepository(StudentRepository):
     # saving
     def _atomic_write(self, df, path):
         tmp_path = path + ".tmp"
+
         try:
             df.to_csv(tmp_path, index=False)
             os.replace(tmp_path, path)  # atomic on POSIX and Windows
+
         except OSError as exc:
-            raise DataFileError(f"Could not save {os.path.basename(path)}: {exc}") from exc
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+
+            raise DataFileError(
+                f"Could not save {os.path.basename(path)}: {exc}"
+            ) from exc
 
     def persist(self):
         os.makedirs(self.data_dir, exist_ok=True)
