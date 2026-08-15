@@ -257,11 +257,21 @@ class CsvStudentRepository(StudentRepository):
     # saving
     def _atomic_write(self, df, path):
         tmp_path = path + ".tmp"
+
         try:
             df.to_csv(tmp_path, index=False)
             os.replace(tmp_path, path)  # atomic on POSIX and Windows
+
         except OSError as exc:
-            raise DataFileError(f"Could not save {os.path.basename(path)}: {exc}") from exc
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+
+            raise DataFileError(
+                f"Could not save {os.path.basename(path)}: {exc}"
+            ) from exc
 
     def persist(self):
         os.makedirs(self.data_dir, exist_ok=True)

@@ -2,7 +2,9 @@ import os
 import shutil
 import tempfile
 import unittest
+import pandas as pd
 
+from unittest.mock import patch
 from campustrack.exceptions import DataFileError, DuplicateStudentError
 from campustrack.models import Student, ExerciseRecord, SleepPattern, Survey
 from campustrack.repository import InMemoryStudentRepository, CsvStudentRepository
@@ -98,6 +100,34 @@ class TestCsvStudentRepository(unittest.TestCase):
 
         with self.assertRaises(DataFileError):
             CsvStudentRepository(self.tmp_dir)
+
+    def test_atomic_write_cleans_up_temp_file_on_failure(self):
+        repo = CsvStudentRepository(self.tmp_dir)
+
+        target_path = repo.students_path
+        tmp_path = target_path + ".tmp"
+
+        with patch(
+            "campustrack.repository.os.replace",
+            side_effect=OSError("simulated failure")
+        ):
+            with self.assertRaises(DataFileError):
+                repo._atomic_write(
+                    pd.DataFrame(
+                        [
+                            {
+                                "student_id": "S001",
+                                "name": "Amina",
+                                "age": 21,
+                                "course": "BIT",
+                                "faculty": "Information Technology",
+                            }
+                        ]
+                    ),
+                    target_path,
+                )
+
+        self.assertFalse(os.path.exists(tmp_path))
 
     def test_corrupted_survey_raises_data_file_error(self):
         repo = CsvStudentRepository(self.tmp_dir)
