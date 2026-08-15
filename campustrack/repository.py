@@ -165,7 +165,10 @@ class CsvStudentRepository(StudentRepository):
             student = self._students.get(row["student_id"])
 
             if student is None:
-                continue
+                raise DataFileError(
+                    f"exercise_records.csv contains record for unknown student "
+                    f"'{row['student_id']}'."
+                )
 
             try:
                 record = ExerciseRecord(
@@ -187,7 +190,10 @@ class CsvStudentRepository(StudentRepository):
             student = self._students.get(row["student_id"])
 
             if student is None:
-                continue
+                raise DataFileError(
+                    f"sleep_records.csv contains record for unknown student "
+                    f"'{row['student_id']}'."
+                )
 
             try:
                 had_good_sleep = (
@@ -212,7 +218,10 @@ class CsvStudentRepository(StudentRepository):
             student = self._students.get(row["student_id"])
 
             if student is None:
-                continue
+                raise DataFileError(
+                    f"surveys.csv contains record for unknown student "
+                    f"'{row['student_id']}'."
+                )
 
             try:
                 answers_raw = str(row["wellbeing_answers"])

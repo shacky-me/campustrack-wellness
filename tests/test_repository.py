@@ -123,6 +123,50 @@ class TestCsvStudentRepository(unittest.TestCase):
 
         with self.assertRaises(DataFileError):
             CsvStudentRepository(self.tmp_dir)
+            
+    def test_exercise_record_for_unknown_student_raises_data_file_error(self):
+        repo = CsvStudentRepository(self.tmp_dir)
+
+        with open(repo.exercise_path, "w") as f:
+            f.write(
+                "student_id,days_per_week,exercise_type,"
+                "duration,day,time_of_day\n"
+            )
+            f.write(
+                "S999,3,running,30,monday,07:00\n"
+            )
+
+        with self.assertRaises(DataFileError):
+            CsvStudentRepository(self.tmp_dir)
+
+    def test_sleep_record_for_unknown_student_raises_data_file_error(self):
+        repo = CsvStudentRepository(self.tmp_dir)
+
+        with open(repo.sleep_path, "w") as f:
+            f.write(
+                "student_id,had_good_sleep,start,end\n"
+            )
+            f.write(
+                "S999,true,23:00,06:00\n"
+            )
+
+        with self.assertRaises(DataFileError):
+            CsvStudentRepository(self.tmp_dir)
+
+    def test_survey_for_unknown_student_raises_data_file_error(self):
+        repo = CsvStudentRepository(self.tmp_dir)
+
+        with open(repo.surveys_path, "w") as f:
+            f.write(
+                "student_id,entry_date,stress_level,mood_rating,"
+                "wellbeing_answers,notes\n"
+            )
+            f.write(
+                "S999,2026-08-06,3,8,4;4;4;4;4,Test\n"
+            )
+
+        with self.assertRaises(DataFileError):
+            CsvStudentRepository(self.tmp_dir)
 
     def test_add_persists_to_disk(self):
         repo = CsvStudentRepository(self.tmp_dir)
