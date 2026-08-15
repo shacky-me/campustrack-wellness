@@ -50,6 +50,80 @@ class TestCsvStudentRepository(unittest.TestCase):
         self.assertEqual(repo.count(), 0)
         self.assertTrue(os.path.exists(repo.students_path))
 
+    def test_corrupted_exercise_record_raises_data_file_error(self):
+        repo = CsvStudentRepository(self.tmp_dir)
+
+        repo.add(
+            Student(
+                "S001",
+                "Amina",
+                21,
+                "BIT",
+                "Information Technology",
+            )
+        )
+
+        with open(repo.exercise_path, "w") as f:
+            f.write(
+                "student_id,days_per_week,exercise_type,"
+                "duration,day,time_of_day\n"
+            )
+            f.write(
+                "S001,invalid,running,30,monday,07:00\n"
+            )
+
+        with self.assertRaises(DataFileError):
+            CsvStudentRepository(self.tmp_dir)
+
+    def test_corrupted_sleep_record_raises_data_file_error(self):
+        repo = CsvStudentRepository(self.tmp_dir)
+
+        repo.add(
+            Student(
+                "S001",
+                "Amina",
+                21,
+                "BIT",
+                "Information Technology",
+            )
+        )
+
+        with open(repo.sleep_path, "w") as f:
+            f.write(
+                "student_id,had_good_sleep,start,end\n"
+            )
+            f.write(
+                "S001,true,invalid-time,06:00\n"
+            )
+
+        with self.assertRaises(DataFileError):
+            CsvStudentRepository(self.tmp_dir)
+
+    def test_corrupted_survey_raises_data_file_error(self):
+        repo = CsvStudentRepository(self.tmp_dir)
+
+        repo.add(
+            Student(
+                "S001",
+                "Amina",
+                21,
+                "BIT",
+                "Information Technology",
+            )
+        )
+
+        with open(repo.surveys_path, "w") as f:
+            f.write(
+                "student_id,entry_date,stress_level,mood_rating,"
+                "wellbeing_answers,notes\n"
+            )
+            f.write(
+                "S001,2026-08-06,invalid,8,4;4;4;4;4,Test\n"
+            )
+
+        with self.assertRaises(DataFileError):
+            CsvStudentRepository(self.tmp_dir)
+
     def test_add_persists_to_disk(self):
         repo = CsvStudentRepository(self.tmp_dir)
         repo.add(Student("S001", "Amina", 21, "BIT", "Information Technology"))
