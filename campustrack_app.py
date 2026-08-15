@@ -26,8 +26,6 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from functools import wraps
 from uuid import uuid4
-
-import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 
