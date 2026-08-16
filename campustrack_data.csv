@@ -5,8 +5,10 @@ exercise,S122,552ce898,,,,5,full body,120,2,22:00,,,,,,,,,
 exercise,S122,4b0f9a3a,,,,5,cardio,60,2,22:00,,,,,,,,,
 exercise,S122,7d6e8c77,,,,5,lower body,45,6,22:00,,,,,,,,,
 sleep,S122,cac748f1,,,,,,,,,False,23:00,04:00,5.0,,,,,
+survey,S122,9421ba27,,,,,,,,,,,,,2026-08-16,4,5,4|4|4|4|4,Good Vibes Only
 student,S23,,Urbashi Barua,25,MIS501,,,,,,,,,,,,,,
 exercise,S23,8d55a6d9,,,,6,cardio,55,1,21:00,,,,,,,,,
+survey,S23,e4d09f36,,,,,,,,,,,,,2026-08-16,8,9,1|1|1|1|1,Life is boring
 student,S34,,Aadarsha Sapkota,25,MIS501,,,,,,,,,,,,,,
 sleep,S34,2f1051b3,,,,,,,,,True,20:00,07:00,11.0,,,,,
 student,S45,,Meshak Kiprono,24,MIS501,,,,,,,,,,,,,,
