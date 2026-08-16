@@ -1,24 +1,6 @@
 """
 CampusTrack - Fitness & Wellness Monitoring System
-Single-file edition (console-based, no GUI)
-
-Everything - custom exceptions, domain models, the CSV repository,
-business logic/reports, pandas/matplotlib analytics, and the console
-menu - lives in this one file so it's easy to read top-to-bottom or
-submit as a single script. Unit tests live separately in
-test_campustrack.py.
-
-Sections in this file (search for the "# ==" banners):
-  1. Exceptions
-  2. Domain models        (Person/Student, WellnessRecord hierarchy)
-  3. Repository            (StudentRepository ABC, InMemory, single-CSV)
-  4. WellnessSystem        (orchestration + reports)
-  5. Analytics             (pandas summaries + matplotlib charts)
-  6. Console CLI           (menus, input validation, main())
-
-Run with:  python campustrack_app.py
-Data is stored in a single CSV file, campustrack_data.csv, saved in the
-same folder as this script (created automatically on first run).
+Group 3
 """
 
 import os
@@ -30,12 +12,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
-# =====================================================================
-# 1. EXCEPTIONS
-# =====================================================================
+
+# EXCEPTIONS
 
 class CampusTrackError(Exception):
-    """Base class for every CampusTrack-specific error."""
+    """Base class"""
 
 
 class StudentNotFoundError(CampusTrackError):
@@ -55,9 +36,8 @@ class RecordNotFoundError(CampusTrackError):
         super().__init__(f"No {record_type} found with ID '{record_id}'.")
         self.record_id = record_id
 
-
+# Wraps failures into one error type
 class DataFileError(CampusTrackError):
-    """Wraps file-system / pandas parsing failures into one error type."""
 
     def __init__(self, path, action, original_exception=None):
         message = f"Could not {action} data file: {path}"
@@ -68,22 +48,18 @@ class DataFileError(CampusTrackError):
         self.original_exception = original_exception
 
 
-# =====================================================================
 # 2. DOMAIN MODELS
-# =====================================================================
 
-SLEEP_BENCHMARK = 8          # benchmark hours of sleep per night
-MAX_STUDENTS = 20            # maximum students the system can hold
-SHORT_SESSION_MINUTES = 10   # exercise sessions shorter than this are flagged
+SLEEP_BENCHMARK = 8          # Sleep benchmark hours
+MAX_STUDENTS = 20            # maximum students 
+SHORT_SESSION_MINUTES = 10   # flag for exercise 
 
-
+# Single record identifier
 def new_record_id():
-    """Short, unique, CSV-friendly identifier for a single record."""
     return uuid4().hex[:8]
 
-
+#Abstract base
 class WellnessRecord(ABC):
-    """Abstract base for anything that can be logged against a student."""
 
     def __init__(self, record_id=None):
         self.record_id = record_id or new_record_id()
@@ -581,17 +557,13 @@ class Student(Person):
         return f"{self.student_id:<8} | {self.name:<20} | Age {self.age:<3} | {self.course}"
 
 
-# =====================================================================
-# 3. REPOSITORY  (single-CSV persistence, using pandas)
-# =====================================================================
+# 3. REPOSITORY - CSV
 
-# One CSV holds every row type. `row_type` tells us which columns apply;
-# columns that don't apply to a given row are left blank.
 DATA_COLUMNS = [
     "row_type", "student_id", "record_id",
-    "name", "age", "course",                                        # student rows
-    "days_per_week", "exercise_type", "duration", "day", "time_of_day",  # exercise rows
-    "had_good_sleep", "start", "end", "hours_slept",                 # sleep rows
+    "name", "age", "course",                                                    # student rows
+    "days_per_week", "exercise_type", "duration", "day", "time_of_day",         # exercise rows
+    "had_good_sleep", "start", "end", "hours_slept",                            # sleep rows
     "entry_date", "stress_level", "mood_rating", "wellbeing_answers", "notes",  # survey rows
 ]
 
@@ -632,7 +604,7 @@ class StudentRepository(ABC):
 
 
 class InMemoryStudentRepository(StudentRepository):
-    """Plain-memory repository. No file I/O - handy for tests."""
+    """Plain-memory repository"""
 
     def __init__(self):
         self._students = {}
@@ -653,14 +625,8 @@ class InMemoryStudentRepository(StudentRepository):
         return len(self._students)
 
 
+# CSV-file-backed repository, using pandas for reading/writing.
 class CsvStudentRepository(StudentRepository):
-    """
-    Single-CSV-file-backed repository, using pandas for reading/writing.
-
-    Every mutating call rewrites the one data file in full - the
-    simplest way to guarantee the file on disk never drifts out of
-    sync with the objects in memory.
-    """
 
     def __init__(self, data_path):
         self.data_path = data_path
@@ -691,8 +657,8 @@ class CsvStudentRepository(StudentRepository):
                 df[col] = pd.NA
         return df
 
+    # In-memory student dict from the single CSV file.
     def load(self):
-        """(Re)build the in-memory student dict from the single CSV file."""
         self._students = {}
         df = self._read_csv()
 
@@ -714,9 +680,9 @@ class CsvStudentRepository(StudentRepository):
                 student.add_sleep_record(SleepPattern.from_dict(data))
             elif row_type == "survey":
                 student.add_survey(Survey.from_dict(data))
-
+                
+    # Rewrite the whole data file from the current in-memory state           
     def _save(self):
-        """Rewrite the whole data file from the current in-memory state."""
         rows = []
         for student in self._students.values():
             student_row = {col: "" for col in DATA_COLUMNS}
@@ -751,7 +717,7 @@ class CsvStudentRepository(StudentRepository):
         except (OSError, PermissionError) as exc:
             raise DataFileError(self.data_path, "write", exc) from exc
 
-    # -- StudentRepository interface --------------------------------------
+    # StudentRepository interface
     def add(self, student):
         self._students[student.student_id] = student
         self._save()
@@ -781,9 +747,8 @@ class CsvStudentRepository(StudentRepository):
         self._save()
 
 
-# =====================================================================
-# 4. WELLNESS SYSTEM  (orchestration + reports)
-# =====================================================================
+
+# WELLNESS SYSTEM
 
 class WellnessSystem:
 
@@ -874,7 +839,7 @@ class WellnessSystem:
         self.repository.persist_survey(student)
         return survey
 
-    # -- Reports ------------------------------------------------------------
+    # Reports 
     def exercise_count_report(self):
         return {s.student_id: len(s.exercise_records) for s in self.all_students()}
 
@@ -913,15 +878,13 @@ class WellnessSystem:
         ]
 
 
-# =====================================================================
-# 5. ANALYTICS  (pandas summaries + matplotlib charts)
-# =====================================================================
+
+# 5. ANALYTICS / CHARTS 
 
 CHART_DPI = 150
 
-
+# Builds pandas DataFrames from a WellnessSystem and renders charts.
 class WellnessAnalytics:
-    """Builds pandas DataFrames from a WellnessSystem and renders charts."""
 
     def __init__(self, system, charts_dir):
         self.system = system
@@ -1056,9 +1019,10 @@ class WellnessAnalytics:
         plt.show()
         plt.close(fig)
         return path
-
+    
+    # One combined 2x2 dashboard image summarising the whole system.
     def build_dashboard(self, filename="dashboard.png"):
-        """One combined 2x2 dashboard image summarising the whole system."""
+        
         path = os.path.join(self.charts_dir, filename)
         exercise_df = self.exercise_dataframe()
         sleep_df = self.sleep_dataframe()
@@ -1114,9 +1078,7 @@ class WellnessAnalytics:
         return path
 
 
-# =====================================================================
 # 6. CONSOLE CLI  (menus, input validation, main())
-# =====================================================================
 
 SEP = "-" * 55
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1244,13 +1206,8 @@ def log_action(label):
         return wrapper
     return decorator
 
-
+# Catch validation errors
 def safe_action(func):
-    """
-    Catch validation errors (ValueError from a model setter) and
-    persistence errors (DataFileError / other CampusTrackError) so a
-    bad input or a locked/missing CSV file never crashes the app.
-    """
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
@@ -1275,7 +1232,7 @@ def resolve_student(system):
     return student
 
 
-# -- Add screens ---------------------------------------------------------
+# Add screens
 @safe_action
 @log_action("Student added")
 def handle_add_student(system):
@@ -1515,7 +1472,7 @@ def handle_update_survey(system, student):
     print(f"\n  Survey [{record_id}] updated and saved to campustrack_data.csv.")
 
 
-# -- Display screens -------------------------------------------------------
+# Display screens
 def handle_display_exercise(student):
     print("\n" + SEP)
     print(f"  EXERCISE INFORMATION - {student.name} ({student.student_id})")
@@ -1611,7 +1568,7 @@ def handle_display_all(system):
         print(student.as_row())
 
 
-# -- Reports menu ------------------------------------------------------------
+# Reports menu 
 def handle_reports(system):
     viewing_reports = True
     while viewing_reports:
@@ -1624,7 +1581,7 @@ def handle_reports(system):
               3. Students needing wellness intervention
               4. Exercise sessions on a given day (all students)
               5. Wellness survey summary per student
-              6. All wellness concerns (exercise + sleep + survey)
+              6. All wellness concerns
               0. Back to main menu
         """)
 
@@ -1679,7 +1636,7 @@ def handle_reports(system):
                           f"avg WHO-5={summary['average_wellbeing']}%")
 
         elif sub_choice == "6":
-            print("\n  -- All Wellness Concerns (polymorphic across record types) --")
+            print("\n  -- All Wellness Concerns  --")
             concerns = system.all_concerns_report()
             if not concerns:
                 print("    None found - no records are currently flagged.")
@@ -1696,23 +1653,23 @@ def handle_reports(system):
         input("\n  Press ENTER to return to the Reports menu...")
 
 
-# -- Analytics menu ------------------------------------------------------
+# Analytics menu 
 @safe_action
 def handle_analytics(system):
     analytics = WellnessAnalytics(system, CHARTS_DIR)
     viewing = True
     while viewing:
         print("\n" + SEP)
-        print("  ANALYTICS & DASHBOARD (pandas + matplotlib)")
+        print("  ANALYTICS & DASHBOARD ")
         print(SEP)
         print("""
-              1. Exercise summary table (pandas)
-              2. Sleep summary table (pandas)
-              3. Survey summary table (pandas)
-              4. Chart: exercise minutes per student (PNG)
-              5. Chart: average sleep per student (PNG)
-              6. Chart: stress & mood trend (PNG)
-              7. Build full dashboard (PNG, 4 panels)
+              1. Exercise summary table 
+              2. Sleep summary table 
+              3. Survey summary table 
+              4. Chart: exercise minutes per student 
+              5. Chart: average sleep per student 
+              6. Chart: stress & mood trend 
+              7. Build full dashboard
               0. Back to main menu
         """)
         sub_choice = input("  Enter your choice: ").strip()
@@ -1748,7 +1705,7 @@ def handle_analytics(system):
             input("\n  Press ENTER to return to the Analytics menu...")
 
 
-# -- Main loop -------------------------------------------------------------
+# Main loop
 def build_system():
     repository = CsvStudentRepository(DATA_PATH)
     return WellnessSystem(repository=repository)
@@ -1779,7 +1736,7 @@ def main():
               11. Display Survey History
               12. Display All Students
               13. Reports
-              14. Analytics & Dashboard (pandas / matplotlib)
+              14. Analytics & Dashboard
               0.  Exit
         """)
         print(SEP)
